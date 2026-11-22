@@ -6,7 +6,11 @@ instance/*
 !instance/.gitignore
 .webassets-cache
 .env
-
+model/yolo26s-pose-hands.pt
+# YOLO model weights
+models/*.pt
+models/*.onnx
+models/*.engine
 ### Flask.Python Stack ###
 # Byte-compiled / optimized / DLL files
 __pycache__/
