@@ -53,12 +53,15 @@ def main():
                 "HandScroll - Hand Detection",
                 annotated_frame
             )
+            annotated_frame, hands = detector.detect(frame)
 
+            print(f"Detected hands: {len(hands)}")
             # Exit when Q is pressed
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
     finally:
+
         camera.release()
         cv2.destroyAllWindows()
 

@@ -28,6 +28,18 @@ class HandDetector:
         print("[HandDetector] Loading YOLO model...")
 
         self.model = YOLO(model_path)
+        print("\n========== MODEL INFORMATION ==========")
+        print("Model names:", self.model.names)
+        print(
+            "Keypoint shape:",
+            getattr(self.model.model, "kpt_shape", "Not available")
+        )
+        print(
+            "Model task:",
+            self.model.task
+        )
+        print("Model YAML:")
+        print(self.model.model.yaml)
         self.confidence = confidence
         self.image_size = image_size
 
@@ -35,11 +47,8 @@ class HandDetector:
 
     def detect(self, frame):
         """
-        Process one webcam frame.
-
-        Returns:
-            annotated_frame: Frame with detected landmarks.
-            hands: List of detected hand information.
+        Detect hands using YOLO and use Ultralytics
+        built-in annotation.
         """
 
         results = self.model.predict(
@@ -49,79 +58,51 @@ class HandDetector:
             verbose=False
         )
 
-        annotated_frame = frame.copy()
-        hands = []
-
-        if not results:
-            return annotated_frame, hands
-
         result = results[0]
 
-        if result.keypoints is None:
-            return annotated_frame, hands
+        # Use the original Ultralytics visualization
+        annotated_frame = result.plot()
 
-        # Extract keypoints
-        keypoints = result.keypoints.xy.cpu().numpy()
+        hands = []
 
-        # Extract keypoint confidence if available
-        keypoint_conf = None
+        if result.keypoints is not None:
 
-        if result.keypoints.conf is not None:
-            keypoint_conf = result.keypoints.conf.cpu().numpy()
+            keypoint_data = result.keypoints.data.cpu().numpy()
 
-        # Extract bounding boxes
-        boxes = []
+            for hand_index, points in enumerate(keypoint_data):
 
-        if result.boxes is not None:
-            boxes = result.boxes.xyxy.cpu().numpy()
-
-        for hand_index, points in enumerate(keypoints):
-
-            if len(points) != 21:
-                continue
-
-            hand_confidence = (
-                float(result.boxes.conf[hand_index].item())
-                if result.boxes is not None
-                else 0.0
-            )
-
-            # Convert coordinates into Python lists
-            landmarks = points.tolist()
-
-            hand = {
-                "landmarks": landmarks,
-                "confidence": hand_confidence,
-                "bbox": (
-                    boxes[hand_index].tolist()
-                    if hand_index < len(boxes)
-                    else None
-                ),
-                "keypoint_confidence": (
-                    keypoint_conf[hand_index].tolist()
-                    if keypoint_conf is not None
-                    else None
-                )
-            }
-
-            hands.append(hand)
-
-            self.draw_landmarks(
-                annotated_frame,
-                points
-            )
+                hands.append({
+                    "landmarks": points[:, :2].tolist(),
+                    "confidence": (
+                        float(result.boxes.conf[hand_index].item())
+                        if result.boxes is not None
+                        else 0.0
+                    ),
+                    "keypoint_confidence": points[:, 2].tolist()
+                })
 
         return annotated_frame, hands
 
-    def draw_landmarks(self, frame, points):
+    def draw_landmarks(self, frame, points, confidence=None):
         """
-        Draw hand skeleton and landmarks.
+        Draw hand skeleton while filtering unreliable landmarks.
         """
 
         points = points.astype(int)
 
-        # Draw connections
+        # Confidence threshold for visualization
+        threshold = 0.35
+
+        if confidence is None:
+            confidence = np.ones(len(points))
+
+        valid = confidence >= threshold
+
+        # Draw connections only when both landmarks are reliable
         for start, end in self.HAND_CONNECTIONS:
+
+            if not valid[start] or not valid[end]:
+                continue
 
             x1, y1 = points[start]
             x2, y2 = points[end]
@@ -134,26 +115,28 @@ class HandDetector:
                 2
             )
 
-        # Draw individual landmarks
+        # Draw landmarks
         for index, (x, y) in enumerate(points):
+
+            if not valid[index]:
+                continue
 
             cv2.circle(
                 frame,
                 (x, y),
-                4,
+                5,
                 (0, 0, 255),
                 -1
             )
 
-            # Label important landmarks
-            if index in [0, 4, 8, 12]:
+            if index in [0, 4, 8, 12, 16, 20]:
 
                 cv2.putText(
                     frame,
                     str(index),
                     (x + 5, y - 5),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.4,
+                    0.5,
                     (255, 255, 255),
                     1
                 )
