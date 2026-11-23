@@ -37,7 +37,6 @@ Scrolling stops when the pinch is released.
 - **MediaPipe** – Hand landmark detection and tracking.
 - **OpenCV** – Webcam access and image processing.
 - **PyAutoGUI** – Mouse-wheel event simulation.
-- **Flask** – Web application framework for the project interface.
 
 ## Requirements
 
@@ -99,9 +98,9 @@ Scrolling behavior can be adjusted in `app.py` through the `ScrollController` pa
 
 ```python
 scroll_controller = ScrollController(
-    sensitivity=0.025,
-    smoothing=0.55,
-    dead_zone=0.8,
+    sensitivity=0.05,
+    smoothing=0.7,
+    dead_zone=0.5,
     max_delta=35
 )
 ```
