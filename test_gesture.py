@@ -6,45 +6,57 @@ from detection.gesture_recognition import GestureRecognizer
 
 
 detector = HandDetector()
-recognizer = GestureRecognizer(pinch_threshold=40)
+recognizer = GestureRecognizer(
+    pinch_start=0.30,
+    pinch_release=0.45
+)
 
 cap = cv2.VideoCapture(0)
 
-while True:
-    success, frame = cap.read()
+try:
+    while True:
+        success, frame = cap.read()
 
-    if not success:
-        break
+        if not success:
+            break
 
-    frame = cv2.flip(frame, 1)
+        frame = cv2.flip(frame, 1)
 
-    annotated_frame, hands = detector.detect(frame)
+        annotated_frame, hands = detector.detect(frame)
 
-    for hand in hands:
-        result = recognizer.recognize(hand)
+        if hands:
+            # Test with the first detected hand.
+            hand = hands[0]
 
-        gesture = result["gesture"]
-        distance = result["pinch_distance"]
+            result = recognizer.recognize(hand)
 
-        wrist_x = int(result["wrist_position"]["x"])
-        wrist_y = int(result["wrist_position"]["y"])
+            gesture = result["gesture"]
+            distance = result["pinch_distance"]
 
-        color = (0, 255, 0) if gesture == "pinch" else (0, 0, 255)
+            wrist = result["wrist_position"]
 
-        cv2.putText(
-            annotated_frame,
-            f"{gesture} ({distance}px)",
-            (wrist_x, wrist_y - 20),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            color,
-            2
-        )
+            color = (
+                (0, 255, 0)
+                if result["is_pinching"]
+                else (0, 0, 255)
+            )
 
-    cv2.imshow("Gesture Recognition Test", annotated_frame)
+            cv2.putText(
+                annotated_frame,
+                f"{gesture} | distance: {distance}",
+                (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                color,
+                2
+            )
 
-    if cv2.waitKey(1) & 0xFF == ord("q"):
-        break
+        cv2.imshow("Pinch Gesture Test", annotated_frame)
 
-cap.release()
-cv2.destroyAllWindows()
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
+
+finally:
+    cap.release()
+    detector.close()
+    cv2.destroyAllWindows()

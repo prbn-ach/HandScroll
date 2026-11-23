@@ -1,142 +1,122 @@
 
 import cv2
-import numpy as np
-from ultralytics import YOLO
+import mediapipe as mp
+import time
+from pathlib import Path
+
+
+HAND_CONNECTIONS = [
+    (0, 1), (1, 2), (2, 3), (3, 4),
+    (0, 5), (5, 6), (6, 7), (7, 8),
+    (5, 9), (9, 10), (10, 11), (11, 12),
+    (9, 13), (13, 14), (14, 15), (15, 16),
+    (13, 17), (17, 18), (18, 19), (19, 20),
+    (0, 17)
+]
 
 
 class HandDetector:
-    """
-    Detects hands and extracts their pose landmarks using YOLO.
-    """
+    def __init__(self, max_hands=2, detection_confidence=0.5,
+                 tracking_confidence=0.5):
 
-    # Standard 21-point hand skeleton connections
-    HAND_CONNECTIONS = [
-        (0, 1), (1, 2), (2, 3), (3, 4),       # Thumb
-        (0, 5), (5, 6), (6, 7), (7, 8),       # Index
-        (0, 9), (9, 10), (10, 11), (11, 12),  # Middle
-        (0, 13), (13, 14), (14, 15), (15, 16),  # Ring
-        (0, 17), (17, 18), (18, 19), (19, 20),  # Pinky
-        (5, 9), (9, 13), (13, 17)             # Palm
-    ]
-
-    def __init__(
-        self,
-        model_path="models/yolo26s-pose-hands.pt",
-        confidence=0.5,
-        image_size=640
-    ):
-        print("[HandDetector] Loading YOLO model...")
-
-        self.model = YOLO(model_path)
-        # print("\n========== MODEL INFORMATION ==========")
-        # print("Model names:", self.model.names)
-        # print(
-        #     "Keypoint shape:",
-        #     getattr(self.model.model, "kpt_shape", "Not available")
-        # )
-        # print(
-        #     "Model task:",
-        #     self.model.task
-        # )
-        # print("Model YAML:")
-        # print(self.model.model.yaml)
-        self.confidence = confidence
-        self.image_size = image_size
-
-        print("[HandDetector] Model loaded successfully!")
-
-    def detect(self, frame):
-        """
-        Detect hands using YOLO and use Ultralytics
-        built-in annotation.
-        """
-
-        results = self.model.predict(
-            source=frame,
-            conf=self.confidence,
-            imgsz=self.image_size,
-            verbose=False
+        model_path = (
+            Path(__file__).resolve().parents[1]
+            / "models"
+            / "hand_landmarker.task"
         )
 
-        result = results[0]
+        if not model_path.exists():
+            raise FileNotFoundError(
+                f"MediaPipe model not found: {model_path}"
+            )
 
-        # Use the original Ultralytics visualization
-        annotated_frame = result.plot()
+        options = mp.tasks.vision.HandLandmarkerOptions(
+            base_options=mp.tasks.BaseOptions(
+                model_asset_path=str(model_path)
+            ),
+            running_mode=mp.tasks.vision.RunningMode.VIDEO,
+            num_hands=max_hands,
+            min_hand_detection_confidence=detection_confidence,
+            min_tracking_confidence=tracking_confidence
+        )
 
+        self.landmarker = (
+            mp.tasks.vision.HandLandmarker.create_from_options(options)
+        )
+
+        self.last_timestamp = -1
+
+    def detect(self, frame):
+        height, width, _ = frame.shape
+
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        mp_image = mp.Image(
+            image_format=mp.ImageFormat.SRGB,
+            data=rgb_frame
+        )
+
+        timestamp = time.monotonic_ns() // 1_000_000
+
+        # Video timestamps must increase strictly.
+        timestamp = max(timestamp, self.last_timestamp + 1)
+        self.last_timestamp = timestamp
+
+        result = self.landmarker.detect_for_video(
+            mp_image,
+            timestamp
+        )
+
+        annotated_frame = frame.copy()
         hands = []
 
-        if result.keypoints is not None:
+        for index, hand_landmarks in enumerate(result.hand_landmarks):
+            landmarks = []
 
-            keypoint_data = result.keypoints.data.cpu().numpy()
+            for point in hand_landmarks:
+                x = point.x * width
+                y = point.y * height
+                z = point.z
 
-            for hand_index, points in enumerate(keypoint_data):
+                landmarks.append([x, y, z])
 
-                hands.append({
-                    "landmarks": points[:, :2].tolist(),
-                    "confidence": (
-                        float(result.boxes.conf[hand_index].item())
-                        if result.boxes is not None
-                        else 0.0
-                    ),
-                    "keypoint_confidence": points[:, 2].tolist()
-                })
+            # Draw connections.
+            for start, end in HAND_CONNECTIONS:
+                p1 = (int(landmarks[start][0]),
+                      int(landmarks[start][1]))
+                p2 = (int(landmarks[end][0]),
+                      int(landmarks[end][1]))
+
+                cv2.line(
+                    annotated_frame, p1, p2,
+                    (0, 255, 0), 2
+                )
+
+            # Draw landmarks.
+            for point in landmarks:
+                cv2.circle(
+                    annotated_frame,
+                    (int(point[0]), int(point[1])),
+                    4,
+                    (0, 0, 255),
+                    -1
+                )
+
+            handedness = "Unknown"
+            score = 0.0
+
+            if index < len(result.handedness):
+                category = result.handedness[index][0]
+                handedness = category.category_name
+                score = category.score
+
+            hands.append({
+                "landmarks": landmarks,
+                "handedness": handedness,
+                "confidence": score
+            })
 
         return annotated_frame, hands
 
-    def draw_landmarks(self, frame, points, confidence=None):
-        """
-        Draw hand skeleton while filtering unreliable landmarks.
-        """
-
-        points = points.astype(int)
-
-        # Confidence threshold for visualization
-        threshold = 0.35
-
-        if confidence is None:
-            confidence = np.ones(len(points))
-
-        valid = confidence >= threshold
-
-        # Draw connections only when both landmarks are reliable
-        for start, end in self.HAND_CONNECTIONS:
-
-            if not valid[start] or not valid[end]:
-                continue
-
-            x1, y1 = points[start]
-            x2, y2 = points[end]
-
-            cv2.line(
-                frame,
-                (x1, y1),
-                (x2, y2),
-                (0, 255, 0),
-                2
-            )
-
-        # Draw landmarks
-        for index, (x, y) in enumerate(points):
-
-            if not valid[index]:
-                continue
-
-            cv2.circle(
-                frame,
-                (x, y),
-                5,
-                (0, 0, 255),
-                -1
-            )
-
-            if index in [0, 4, 8, 12, 16, 20]:
-
-                cv2.putText(
-                    frame,
-                    str(index),
-                    (x + 5, y - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (255, 255, 255),
-                    1
-                )
+    def close(self):
+        self.landmarker.close()

@@ -1,70 +1,43 @@
-
 import cv2
 
 from detection.hand_detector import HandDetector
 
 
-def main():
+detector = HandDetector()
 
-    # Initialize detector
-    detector = HandDetector(
-        model_path="models/yolo26s-pose-hands.pt",
-        confidence=0.5
-    )
+cap = cv2.VideoCapture(0)
 
-    # Initialize webcam
-    camera = cv2.VideoCapture(0)
+try:
+    while True:
+        success, frame = cap.read()
 
-    if not camera.isOpened():
-        print("[ERROR] Could not open webcam.")
-        return
+        if not success:
+            break
 
-    print("[INFO] Webcam started.")
-    print("[INFO] Press Q to quit.")
+        frame = cv2.flip(frame, 1)
 
-    try:
-        while True:
+        annotated_frame, hands = detector.detect(frame)
 
-            success, frame = camera.read()
+        for hand in hands:
+            wrist = hand["landmarks"][0]
 
-            if not success:
-                print("[ERROR] Could not read webcam frame.")
-                break
-
-            # Mirror the webcam
-            frame = cv2.flip(frame, 1)
-
-            # Detect hands
-            annotated_frame, hands = detector.detect(frame)
-
-            # Display detection count
             cv2.putText(
                 annotated_frame,
-                f"Hands detected: {len(hands)}",
-                (20, 35),
+                f"{hand['handedness']} "
+                f"({hand['confidence']:.2f})",
+                (int(wrist[0]), int(wrist[1]) - 20),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (0, 255, 0),
+                0.7,
+                (255, 255, 0),
                 2
             )
 
-            # Display webcam
-            cv2.imshow(
-                "HandScroll - Hand Detection",
-                annotated_frame
-            )
-            annotated_frame, hands = detector.detect(frame)
+        cv2.imshow("MediaPipe Hand Detection", annotated_frame)
 
-            print(f"Detected hands: {len(hands)}")
-            # Exit when Q is pressed
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
 
-    finally:
-
-        camera.release()
-        cv2.destroyAllWindows()
-
-
-if __name__ == "__main__":
-    main()
+finally:
+    cap.release()
+    detector.close()
+    cv2.destroyAllWindows()
