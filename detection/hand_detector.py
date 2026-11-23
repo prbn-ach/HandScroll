@@ -28,18 +28,18 @@ class HandDetector:
         print("[HandDetector] Loading YOLO model...")
 
         self.model = YOLO(model_path)
-        print("\n========== MODEL INFORMATION ==========")
-        print("Model names:", self.model.names)
-        print(
-            "Keypoint shape:",
-            getattr(self.model.model, "kpt_shape", "Not available")
-        )
-        print(
-            "Model task:",
-            self.model.task
-        )
-        print("Model YAML:")
-        print(self.model.model.yaml)
+        # print("\n========== MODEL INFORMATION ==========")
+        # print("Model names:", self.model.names)
+        # print(
+        #     "Keypoint shape:",
+        #     getattr(self.model.model, "kpt_shape", "Not available")
+        # )
+        # print(
+        #     "Model task:",
+        #     self.model.task
+        # )
+        # print("Model YAML:")
+        # print(self.model.model.yaml)
         self.confidence = confidence
         self.image_size = image_size
 

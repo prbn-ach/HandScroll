@@ -6,7 +6,8 @@ instance/*
 !instance/.gitignore
 .webassets-cache
 .env
-model/yolo26s-pose-hands.pt
+models/yolo26s-pose-hands.pt
+models/hand_landmarker.task
 # YOLO model weights
 models/*.pt
 models/*.onnx
