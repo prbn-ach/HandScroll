@@ -1,28 +1,61 @@
 
+import math
 import pyautogui
 
 
 class ScrollController:
-    def __init__(self, sensitivity=1.0, dead_zone=2):
+    def __init__(
+        self,
+        sensitivity=0.025,
+        smoothing=0.20,
+        dead_zone=1.5,
+        max_delta=35
+    ):
         self.sensitivity = sensitivity
+        self.smoothing = smoothing
         self.dead_zone = dead_zone
+        self.max_delta = max_delta
+
+        self.smoothed_delta = 0.0
+        self.scroll_accumulator = 0.0
 
     def scroll(self, delta_y):
         """
-        Convert hand movement into mouse scrolling.
+        Smooth hand movement and convert it into scroll events.
 
-        Moving hand up   -> scroll up
-        Moving hand down -> scroll down
+        Positive delta_y = hand moves down.
+        Negative delta_y = hand moves up.
         """
 
-        if abs(delta_y) < self.dead_zone:
+        # Prevent unusually large tracking jumps.
+        delta_y = max(
+            -self.max_delta,
+            min(self.max_delta, delta_y)
+        )
+
+        # Exponential moving average.
+        self.smoothed_delta = (
+            self.smoothing * delta_y
+            + (1 - self.smoothing) * self.smoothed_delta
+        )
+
+        # Ignore small movements.
+        if abs(self.smoothed_delta) < self.dead_zone:
             return
 
-        scroll_amount = int(delta_y * self.sensitivity)
+        # Accumulate fractional scroll movement.
+        self.scroll_accumulator += (
+            -self.smoothed_delta * self.sensitivity
+        )
 
-        if scroll_amount == 0:
-            return
+        # Only generate complete scroll steps.
+        scroll_amount = math.trunc(self.scroll_accumulator)
 
-        # Invert direction:
-        # Hand moves up (negative delta) -> positive scroll.
-        pyautogui.scroll(-scroll_amount)
+        if scroll_amount != 0:
+            pyautogui.scroll(scroll_amount)
+            self.scroll_accumulator -= scroll_amount
+
+    def reset(self):
+        """Reset smoothing and accumulated movement."""
+        self.smoothed_delta = 0.0
+        self.scroll_accumulator = 0.0

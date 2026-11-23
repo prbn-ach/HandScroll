@@ -17,8 +17,10 @@ recognizer = GestureRecognizer(
 tracker = MovementTracker()
 
 scroll_controller = ScrollController(
-    sensitivity=1.0,
-    dead_zone=2
+    sensitivity=0.025,
+    smoothing=0.55,
+    dead_zone=0.8,
+    max_delta=35
 )
 
 cap = cv2.VideoCapture(0)
@@ -47,7 +49,10 @@ try:
 
                 status = "SCROLLING"
                 color = (0, 255, 0)
+
             else:
+                scroll_controller.reset()
+
                 status = "NOT SCROLLING"
                 color = (0, 0, 255)
 
@@ -83,6 +88,7 @@ try:
 
         else:
             tracker.reset()
+            scroll_controller.reset()
 
         cv2.imshow("HandScroll - Scrolling Test", annotated_frame)
 
