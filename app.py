@@ -17,9 +17,9 @@ recognizer = GestureRecognizer(
 tracker = MovementTracker()
 
 scroll_controller = ScrollController(
-    sensitivity=0.025,
-    smoothing=0.55,
-    dead_zone=0.8,
+    sensitivity=0.05,
+    smoothing=0.7,
+    dead_zone=0.5,
     max_delta=35
 )
 
